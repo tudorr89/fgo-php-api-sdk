@@ -12,20 +12,21 @@ use FgoApi\Endpoints\WarehouseEndpoint;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static InvoiceEndpoint      invoices()
- * @method static ArticleEndpoint      articles()
- * @method static NomenclatureEndpoint nomenclatures()
- * @method static WarehouseEndpoint    warehouses()
- * @method static string               getCodUnic()
- * @method static string               getPrivateKey()
- * @method static string               getPlatformUrl()
+ * @method static Client                default()
+ * @method static Client                for(string $key)
+ * @method static Client                make(array<string, mixed> $credentials)
+ * @method static void                  forget(?string $key = null)
+ * @method static InvoiceEndpoint       invoices()
+ * @method static ArticleEndpoint       articles()
+ * @method static NomenclatureEndpoint  nomenclatures()
+ * @method static WarehouseEndpoint     warehouses()
  *
- * @see Client
+ * @see FgoManager
  */
 class Fgo extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return Client::class;
+        return FgoManager::class;
     }
 }

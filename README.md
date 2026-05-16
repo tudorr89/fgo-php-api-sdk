@@ -112,6 +112,72 @@ use FgoApi\Client;
 public function __construct(private readonly Client $fgo) {}
 ```
 
+### Multi-tenant / credentials from the database
+
+When each tenant (or merchant, or user) has their own FGO credentials, point the
+package at a **resolver** instead of reading from `.env`. Implement
+`FgoApi\Laravel\Contracts\CredentialsResolver`:
+
+```php
+namespace App\Fgo;
+
+use App\Models\Tenant;
+use FgoApi\Laravel\Contracts\CredentialsResolver;
+
+class TenantCredentialsResolver implements CredentialsResolver
+{
+    public function resolve(?string $key = null): array
+    {
+        $tenant = $key
+            ? Tenant::findOrFail($key)
+            : Tenant::current();
+
+        return [
+            'cod_unic'     => $tenant->fgo_cod_unic,
+            'private_key'  => decrypt($tenant->fgo_private_key),
+            'platform_url' => $tenant->platform_url,
+            'environment'  => $tenant->fgo_environment, // "test" or "production"
+        ];
+    }
+}
+```
+
+Register it in `config/fgo.php`:
+
+```php
+'resolver' => \App\Fgo\TenantCredentialsResolver::class,
+```
+
+Then:
+
+```php
+use FgoApi\Laravel\Fgo;
+
+// Current tenant — resolver is called with null
+Fgo::invoices()->create(...);
+
+// Specific tenant — resolver is called with the key, result cached for the request
+Fgo::for($tenantId)->invoices()->create(...);
+
+// Ad-hoc credentials (e.g. testing, one-off jobs)
+Fgo::make([
+    'cod_unic'     => '...',
+    'private_key'  => '...',
+    'platform_url' => 'https://my-app.test',
+    'environment'  => 'test',
+])->invoices()->getStatus('001', 'BV');
+
+// After rotating credentials
+Fgo::forget($tenantId);
+```
+
+A closure is also accepted if you don't want a dedicated class:
+
+```php
+// in a service provider
+config(['fgo.resolver' => fn (?string $key) => Tenant::resolve($key)->fgoConfig()]);
+```
+
 ---
 
 ## Authentication

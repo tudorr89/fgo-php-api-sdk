@@ -5,11 +5,37 @@ declare(strict_types=1);
 return [
     /*
     |--------------------------------------------------------------------------
-    | FGO API Credentials
+    | Credential Resolver
     |--------------------------------------------------------------------------
     |
-    | Your unique FGO account code (CUI) and the private API key generated in
-    | the FGO Settings panel. Keep these out of version control.
+    | Optional. Point this at a class that implements
+    | FgoApi\Laravel\Contracts\CredentialsResolver, or a callable
+    | ([Class::class, 'method'] or a Closure registered in a service provider),
+    | and the bundled FgoManager will use it to look up credentials at runtime
+    | instead of reading the values below.
+    |
+    | Typical use cases:
+    |   - per-tenant credentials stored in a database
+    |   - per-user credentials in a multi-merchant SaaS
+    |   - credentials from a secrets manager
+    |
+    | Examples:
+    |   'resolver' => \App\Fgo\TenantCredentialsResolver::class,
+    |   'resolver' => [\App\Fgo\Repository::class, 'currentCredentials'],
+    |
+    | When null, the static values below are used for the "default" client.
+    |
+    */
+
+    'resolver' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Static FGO API Credentials
+    |--------------------------------------------------------------------------
+    |
+    | Used when no resolver is configured. Pulls from the environment so you
+    | never commit secrets. Ignored entirely when a resolver is set.
     |
     */
 
@@ -20,10 +46,6 @@ return [
     |--------------------------------------------------------------------------
     | Platform URL
     |--------------------------------------------------------------------------
-    |
-    | Identifies your application to FGO (sent as PlatformaUrl). Typically the
-    | base URL of the app integrating with the API.
-    |
     */
 
     'platform_url' => env('FGO_PLATFORM_URL', env('APP_URL', '')),
@@ -34,7 +56,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | "test" hits the UAT sandbox, "production" hits live. You can also pass a
-    | full custom URL if FGO ever exposes a self-hosted endpoint for you.
+    | full custom URL string.
     |
     */
 

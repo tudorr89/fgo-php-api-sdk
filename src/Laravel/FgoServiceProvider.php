@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace FgoApi\Laravel;
 
 use FgoApi\Client;
-use FgoApi\Enums\Environment;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\ServiceProvider;
 
@@ -15,29 +14,11 @@ class FgoServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__ . '/../../config/fgo.php', 'fgo');
 
-        $this->app->singleton(Client::class, static function (Container $app): Client {
-            /** @var array<string, mixed> $config */
-            $config = $app['config']->get('fgo', []);
+        $this->app->singleton(FgoManager::class, static fn (Container $app): FgoManager => new FgoManager($app));
 
-            $environment = $config['environment'] ?? 'test';
-            if (\is_string($environment)) {
-                $environment = match (\strtolower($environment)) {
-                    'production', 'prod', 'live' => Environment::Production,
-                    'test', 'testing', 'uat', 'sandbox' => Environment::Test,
-                    default => $environment,
-                };
-            }
+        $this->app->bind(Client::class, static fn (Container $app): Client => $app->make(FgoManager::class)->default());
 
-            return new Client(
-                codUnic: (string) ($config['cod_unic'] ?? ''),
-                privateKey: (string) ($config['private_key'] ?? ''),
-                platformUrl: (string) ($config['platform_url'] ?? ''),
-                environment: $environment,
-                timeout: (int) ($config['timeout'] ?? 20),
-            );
-        });
-
-        $this->app->alias(Client::class, 'fgo');
+        $this->app->alias(FgoManager::class, 'fgo');
     }
 
     public function boot(): void
@@ -54,6 +35,6 @@ class FgoServiceProvider extends ServiceProvider
      */
     public function provides(): array
     {
-        return [Client::class, 'fgo'];
+        return [Client::class, FgoManager::class, 'fgo'];
     }
 }
