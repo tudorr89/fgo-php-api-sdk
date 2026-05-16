@@ -8,7 +8,7 @@ readonly class NomenclatureItem
 {
     public function __construct(
         public string $name,
-        public string $value,
+        public ?string $value,
     ) {
     }
 
@@ -17,9 +17,11 @@ readonly class NomenclatureItem
      */
     public static function fromArray(array $data): self
     {
+        $value = $data['Valoare'] ?? null;
+
         return new self(
-            name: $data['Nume'],
-            value: $data['Valoare'],
+            name: (string) ($data['Nume'] ?? ''),
+            value: $value === null ? null : (string) $value,
         );
     }
 }
