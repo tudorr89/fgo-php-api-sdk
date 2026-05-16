@@ -23,7 +23,7 @@ use GuzzleHttp\Exception\ServerException;
 
 final class Client
 {
-    public const VERSION = '1.0.1';
+    public const VERSION = '1.0.2';
 
     private HttpClient $http;
     private InvoiceEndpoint $invoice;

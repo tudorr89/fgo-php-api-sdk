@@ -68,6 +68,52 @@ echo "PDF: {$invoice->pdfLink}\n";
 
 ---
 
+## Laravel
+
+The package ships with auto-discovered service provider and facade — no manual registration needed.
+
+### Configure
+
+```bash
+php artisan vendor:publish --tag=fgo-config
+```
+
+Add to `.env`:
+
+```dotenv
+FGO_COD_UNIC=YOUR_CUI
+FGO_PRIVATE_KEY=YOUR_PRIVATE_KEY
+FGO_PLATFORM_URL=https://your-app.com
+FGO_ENVIRONMENT=test          # or "production"
+FGO_TIMEOUT=20
+```
+
+### Use it
+
+```php
+use FgoApi\Laravel\Fgo;
+use FgoApi\Types\AddressClient;
+use FgoApi\Types\InvoiceLine;
+
+$invoice = Fgo::invoices()->create(
+    series:      'BV',
+    currency:    'RON',
+    invoiceType: 'Factura',
+    clientData:  new AddressClient(name: 'Acme SRL'),
+    lines:       [new InvoiceLine(name: 'Service', quantity: 1, unit: 'BUC', vatRate: 19, unitPrice: 100)],
+);
+```
+
+Or via DI:
+
+```php
+use FgoApi\Client;
+
+public function __construct(private readonly Client $fgo) {}
+```
+
+---
+
 ## Authentication
 
 All requests are signed with an SHA-1 hash. The `Hash` helper provides the correct calculation for each endpoint category:
