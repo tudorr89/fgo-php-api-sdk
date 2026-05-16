@@ -217,10 +217,14 @@ All exceptions extend `FgoApi\Exceptions\FgoApiException`:
 ```php
 try {
     $invoice = $client->invoices()->create(...);
+} catch (ValidationException $e) {
+    // 400 / `Errors` map from API
+    print_r($e->getErrors());
 } catch (AuthenticationException $e) {
-    // Wrong CUI or private key
+    // 401 / 403 — wrong CUI or private key
 } catch (RateLimitException $e) {
-    // Wait and retry
+    sleep(max(1, $e->getRetryAfter()));
+    // ...retry
 } catch (FgoApiException $e) {
     // All other API errors
 }

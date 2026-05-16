@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace FgoApi\Endpoints;
 
 use FgoApi\Client;
+use FgoApi\Exceptions\FgoApiException;
 use FgoApi\Hash;
+use FgoApi\Types\AddressClient;
+use FgoApi\Types\AssociatedInvoice;
+use FgoApi\Types\InvoiceLine;
 use FgoApi\Types\InvoiceResult;
 use FgoApi\Types\InvoiceStatusResult;
-use FgoApi\Types\AddressClient;
-use FgoApi\Types\InvoiceLine;
-use FgoApi\Types\AssociatedInvoice;
+use InvalidArgumentException;
 
 final class InvoiceEndpoint
 {
@@ -22,17 +24,7 @@ final class InvoiceEndpoint
     /**
      * Create and emit a new invoice.
      *
-     * @param  string               $series       Invoice series from FGO Settings
-     * @param  string               $currency     Currency code (e.g. RON, EUR)
-     * @param  string               $invoiceType  Invoice type from nomenclature
-     * @param  AddressClient        $clientData   Client details
-     * @param  array<InvoiceLine>   $lines        Invoice content lines
-     * @param  string|null          $number       Invoice number (auto-generated if omitted)
-     * @param  string|null          $issueDate    Issue date (yyyy-mm-dd)
-     * @param  string|null          $dueDate      Due date
-     * @param  bool                 $checkDuplicate Whether to check for duplicates
-     * @param  bool                 $vatOnCollection VAT at collection
-     * @return InvoiceResult
+     * @param array<InvoiceLine> $lines Invoice content lines (must be non-empty)
      */
     public function create(
         string $series,
@@ -46,15 +38,17 @@ final class InvoiceEndpoint
         bool $checkDuplicate = false,
         bool $vatOnCollection = false,
     ): InvoiceResult {
-        $hash = Hash::forInvoiceCreate(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $clientData->name,
-        );
+        if ($lines === []) {
+            throw new InvalidArgumentException('An invoice must contain at least one line.');
+        }
 
         $payload = [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => Hash::forInvoiceCreate(
+                $this->client->getCodUnic(),
+                $this->client->getPrivateKey(),
+                $clientData->name,
+            ),
             'Serie' => $series,
             'Valuta' => $currency,
             'TipFactura' => $invoiceType,
@@ -78,87 +72,31 @@ final class InvoiceEndpoint
 
         $response = $this->client->post('factura/emitere', $payload);
 
-        return InvoiceResult::fromArray($response['Factura']);
+        return InvoiceResult::fromArray($this->extractInvoice($response));
     }
 
-    /**
-     * Generate PDF for an existing invoice.
-     */
     public function print(string $number, string $series): InvoiceResult
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
+        $response = $this->client->post('factura/print', $this->invoiceOperationPayload($number, $series));
 
-        $response = $this->client->post('factura/print', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ]);
-
-        return InvoiceResult::fromArray($response['Factura']);
+        return InvoiceResult::fromArray($this->extractInvoice($response));
     }
 
-    /**
-     * Permanently delete an invoice.
-     */
     public function delete(string $number, string $series): void
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
-
-        $this->client->post('factura/stergere', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ]);
+        $this->client->post('factura/stergere', $this->invoiceOperationPayload($number, $series));
     }
 
-    /**
-     * Cancel an invoice (keeps it in history).
-     */
     public function cancel(string $number, string $series): void
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
-
-        $this->client->post('factura/anulare', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ]);
+        $this->client->post('factura/anulare', $this->invoiceOperationPayload($number, $series));
     }
 
-    /**
-     * Get current status of an invoice.
-     */
     public function getStatus(string $number, string $series): InvoiceStatusResult
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
+        $response = $this->client->post('factura/getstatus', $this->invoiceOperationPayload($number, $series));
 
-        $response = $this->client->post('factura/getstatus', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ]);
-
-        return InvoiceStatusResult::fromArray($response['Factura']);
+        return InvoiceStatusResult::fromArray($this->extractInvoice($response));
     }
 
     /**
@@ -173,15 +111,17 @@ final class InvoiceEndpoint
         float $amount,
         string $paymentDate,
     ): void {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $invoiceNumber,
-        );
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Payment amount must be greater than zero.');
+        }
 
         $this->client->post('factura/incasare', [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => Hash::forInvoiceOperation(
+                $this->client->getCodUnic(),
+                $this->client->getPrivateKey(),
+                $invoiceNumber,
+            ),
             'NumarFactura' => $invoiceNumber,
             'SerieFactura' => $invoiceSeries,
             'TipIncasare' => $paymentType,
@@ -190,28 +130,11 @@ final class InvoiceEndpoint
         ]);
     }
 
-    /**
-     * Delete a payment from an invoice.
-     */
     public function deletePayment(string $invoiceNumber, string $invoiceSeries): void
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $invoiceNumber,
-        );
-
-        $this->client->post('factura/stergereincasare', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $invoiceNumber,
-            'Serie' => $invoiceSeries,
-        ]);
+        $this->client->post('factura/stergereincasare', $this->invoiceOperationPayload($invoiceNumber, $invoiceSeries));
     }
 
-    /**
-     * Reverse an invoice (create credit note).
-     */
     public function reverse(
         string $number,
         string $series,
@@ -219,18 +142,7 @@ final class InvoiceEndpoint
         ?string $stornoNumber = null,
         ?string $issueDate = null,
     ): void {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
-
-        $payload = [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ];
+        $payload = $this->invoiceOperationPayload($number, $series);
 
         if ($stornoSeries !== null) {
             $payload['SerieStorno'] = $stornoSeries;
@@ -245,24 +157,12 @@ final class InvoiceEndpoint
         $this->client->post('factura/stornare', $payload);
     }
 
-    /**
-     * Add a courier tracking number (AWB) to an invoice.
-     */
     public function addTrackingNumber(string $number, string $series, string $awb): void
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
+        $payload = $this->invoiceOperationPayload($number, $series);
+        $payload['AWB'] = $awb;
 
-        $this->client->post('factura/awb', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-            'AWB' => $awb,
-        ]);
+        $this->client->post('factura/awb', $payload);
     }
 
     /**
@@ -274,26 +174,47 @@ final class InvoiceEndpoint
      */
     public function listAssociated(string $number, string $series): array
     {
-        $hash = Hash::forInvoiceOperation(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-            $number,
-        );
-
-        $response = $this->client->post('factura/listfacturiasociate', [
-            'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'Numar' => $number,
-            'Serie' => $series,
-        ]);
+        $response = $this->client->post('factura/listfacturiasociate', $this->invoiceOperationPayload($number, $series));
 
         $invoices = [];
         if (isset($response['Facturi']) && \is_array($response['Facturi'])) {
             foreach ($response['Facturi'] as $inv) {
-                $invoices[] = AssociatedInvoice::fromArray($inv);
+                if (\is_array($inv)) {
+                    $invoices[] = AssociatedInvoice::fromArray($inv);
+                }
             }
         }
 
         return $invoices;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function invoiceOperationPayload(string $number, string $series): array
+    {
+        return [
+            'CodUnic' => $this->client->getCodUnic(),
+            'Hash' => Hash::forInvoiceOperation(
+                $this->client->getCodUnic(),
+                $this->client->getPrivateKey(),
+                $number,
+            ),
+            'Numar' => $number,
+            'Serie' => $series,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed> $response
+     * @return array<string, mixed>
+     */
+    private function extractInvoice(array $response): array
+    {
+        if (!isset($response['Factura']) || !\is_array($response['Factura'])) {
+            throw new FgoApiException('API response did not contain a Factura object.');
+        }
+
+        return $response['Factura'];
     }
 }

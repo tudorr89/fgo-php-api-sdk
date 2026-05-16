@@ -18,8 +18,20 @@ final class Hash
         return \strtoupper(\sha1($codUnic . $privateKey . $invoiceNumber));
     }
 
-    public static function forArticle(string $codUnic, string $privateKey): string
+    /**
+     * Hash for endpoints that only require CodUnic + PrivateKey
+     * (articles, nomenclatures, warehouses).
+     */
+    public static function forBase(string $codUnic, string $privateKey): string
     {
         return \strtoupper(\sha1($codUnic . $privateKey));
+    }
+
+    /**
+     * @deprecated Use {@see self::forBase()} — same hash, clearer name.
+     */
+    public static function forArticle(string $codUnic, string $privateKey): string
+    {
+        return self::forBase($codUnic, $privateKey);
     }
 }

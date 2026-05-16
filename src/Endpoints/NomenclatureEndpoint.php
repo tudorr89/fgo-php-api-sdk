@@ -23,11 +23,6 @@ final class NomenclatureEndpoint
      */
     public function get(NomenclatureType $type, ?string $countyCode = null): array
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $endpoint = 'nomenclator/' . $type->value;
 
         if ($countyCode !== null) {
@@ -36,13 +31,18 @@ final class NomenclatureEndpoint
 
         $response = $this->client->post($endpoint, [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => Hash::forBase(
+                $this->client->getCodUnic(),
+                $this->client->getPrivateKey(),
+            ),
         ]);
 
         $items = [];
         if (isset($response['List']) && \is_array($response['List'])) {
             foreach ($response['List'] as $item) {
-                $items[] = NomenclatureItem::fromArray($item);
+                if (\is_array($item)) {
+                    $items[] = NomenclatureItem::fromArray($item);
+                }
             }
         }
 

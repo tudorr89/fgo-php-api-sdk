@@ -23,16 +23,11 @@ final class ArticleEndpoint
      */
     public function list(int $page = 1, int $perPage = 50): ArticleListResult
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $response = $this->client->post('articol/list', [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'NrPagina' => $page,
-            'NrArticole' => \min($perPage, 200),
+            'Hash' => $this->baseHash(),
+            'NrPagina' => \max(1, $page),
+            'NrArticole' => \max(1, \min($perPage, 200)),
         ]);
 
         return ArticleListResult::fromArray($response);
@@ -43,16 +38,15 @@ final class ArticleEndpoint
      */
     public function get(string $articleCode): Article
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $response = $this->client->post('articol/get', [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => $this->baseHash(),
             'CodArticol' => $articleCode,
         ]);
+
+        if (!isset($response['Result']) || !\is_array($response['Result'])) {
+            throw new \FgoApi\Exceptions\FgoApiException('API response did not contain a Result object.');
+        }
 
         return Article::fromArray($response['Result']);
     }
@@ -66,21 +60,18 @@ final class ArticleEndpoint
      */
     public function getList(array $codes): array
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $response = $this->client->post('articol/getlist', [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => $this->baseHash(),
             'CodArticol' => \implode(',', \array_slice($codes, 0, 30)),
         ]);
 
         $articles = [];
         if (isset($response['Result']) && \is_array($response['Result'])) {
             foreach ($response['Result'] as $article) {
-                $articles[] = Article::fromArray($article);
+                if (\is_array($article)) {
+                    $articles[] = Article::fromArray($article);
+                }
             }
         }
 
@@ -96,15 +87,10 @@ final class ArticleEndpoint
      */
     public function modifiedArticles(int $hoursBack = 24, ?int $hoursTo = null): array
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $payload = [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
-            'NumarOre' => \min($hoursBack, 170),
+            'Hash' => $this->baseHash(),
+            'NumarOre' => \max(1, \min($hoursBack, 170)),
         ];
 
         if ($hoursTo !== null) {
@@ -116,10 +102,20 @@ final class ArticleEndpoint
         $articles = [];
         if (isset($response['Result']) && \is_array($response['Result'])) {
             foreach ($response['Result'] as $article) {
-                $articles[] = Article::fromArray($article);
+                if (\is_array($article)) {
+                    $articles[] = Article::fromArray($article);
+                }
             }
         }
 
         return $articles;
+    }
+
+    private function baseHash(): string
+    {
+        return Hash::forBase(
+            $this->client->getCodUnic(),
+            $this->client->getPrivateKey(),
+        );
     }
 }

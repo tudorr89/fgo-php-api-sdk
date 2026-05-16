@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace FgoApi\Types;
 
+use FgoApi\Enums\ClientType;
+
 readonly class AddressClient
 {
+    public string $type;
+
     public function __construct(
         public string $name,
         public ?string $fiscalCode = null,
@@ -15,10 +19,11 @@ readonly class AddressClient
         public ?string $county = null,
         public ?string $locality = null,
         public ?string $address = null,
-        public string $type = 'PF',
+        ClientType|string $type = ClientType::Individual,
         public ?string $externalId = null,
         public ?bool $isForeign = null,
     ) {
+        $this->type = $type instanceof ClientType ? $type->value : $type;
     }
 
     /**

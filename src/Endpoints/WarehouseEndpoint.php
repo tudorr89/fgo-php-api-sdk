@@ -22,20 +22,20 @@ final class WarehouseEndpoint
      */
     public function list(): array
     {
-        $hash = Hash::forArticle(
-            $this->client->getCodUnic(),
-            $this->client->getPrivateKey(),
-        );
-
         $response = $this->client->post('articol/gestiune', [
             'CodUnic' => $this->client->getCodUnic(),
-            'Hash' => $hash,
+            'Hash' => Hash::forBase(
+                $this->client->getCodUnic(),
+                $this->client->getPrivateKey(),
+            ),
         ]);
 
         $warehouses = [];
         if (isset($response['Result']['List']) && \is_array($response['Result']['List'])) {
             foreach ($response['Result']['List'] as $wh) {
-                $warehouses[] = Warehouse::fromArray($wh);
+                if (\is_array($wh)) {
+                    $warehouses[] = Warehouse::fromArray($wh);
+                }
             }
         }
 
